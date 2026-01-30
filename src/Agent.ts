@@ -1,5 +1,7 @@
 import ChatOpenAI from "./ChatOpenAI.js";
 import MCPClient from "./MCPClient.js";
+import EmbeddingRetrievers from "./embeddingRetrievers.js";
+import { RetrievalResult } from "./retrievalPipeline.js";
 import { logTitle } from "./util.js";
 
 export default class Agent {
@@ -8,12 +10,20 @@ export default class Agent {
     private model: string;
     private systemPrompt: string;
     private context: string;
+    private embeddingRetrievers: EmbeddingRetrievers | null;
 
-    constructor(model: string, mcpClients: MCPClient[], systemPrompt: string, context: string) {
+    constructor(
+        model: string,
+        mcpClients: MCPClient[],
+        systemPrompt: string,
+        context: string = "",
+        embeddingRetrievers?: EmbeddingRetrievers
+    ) {
         this.mcpClients = mcpClients;
         this.model = model;
         this.systemPrompt = systemPrompt;
         this.context = context;
+        this.embeddingRetrievers = embeddingRetrievers || null;
     }
 
     // Initialize LLM and MCP Clients
@@ -85,11 +95,108 @@ export default class Agent {
     //     await this.close();
     //     return response?.content || "";
     // }
+    /**
+     * Build RAG context block from retrieval results with financial reasoning instructions
+     */
+    private buildRAGContext(retrievalResults: RetrievalResult[]): string {
+        if (retrievalResults.length === 0) {
+            return "";
+        }
+
+        const contextBlocks = retrievalResults.map((result, index) => {
+            const source = result.metadata.source;
+            const chunkId = result.metadata.chunk_id;
+            const market = result.metadata.market ? ` (${result.metadata.market})` : "";
+            const type = result.metadata.type ? ` [${result.metadata.type}]` : "";
+            
+            return `[Retrieved Knowledge ${index + 1}]
+Source: ${source}${market}${type} (chunk ${chunkId})
+Relevance Score: ${(result.rerankScore || result.score).toFixed(3)}
+
+${result.document}`;
+        });
+
+        // Extract unique markets and types from retrieved context
+        const markets = new Set<string>();
+        const types = new Set<string>();
+        retrievalResults.forEach(r => {
+            if (r.metadata.market) markets.add(r.metadata.market);
+            if (r.metadata.type) types.add(r.metadata.type);
+        });
+
+        const marketList = Array.from(markets).join(", ");
+        const typeList = Array.from(types).join(", ");
+
+        return `[RETRIEVED MARKET KNOWLEDGE]
+The following context has been retrieved from your knowledge base. Use this as EVIDENCE for your financial analysis.
+
+Context Summary:
+- Markets covered: ${marketList || "Multiple markets"}
+- Analysis types: ${typeList || "Mixed analysis"}
+- Number of relevant chunks: ${retrievalResults.length}
+
+${contextBlocks.join("\n\n---\n\n")}
+
+[REASONING INSTRUCTIONS]
+When answering the user's question:
+1. Base your analysis ONLY on the retrieved knowledge above or real-time tool data. Do not invent facts.
+2. If the question involves comparison (e.g., US vs HK), use quantitative metrics (return, volatility, drawdown) from the retrieved context.
+3. Interpret risk metrics automatically:
+   - High volatility → "Higher short-term uncertainty"
+   - High drawdown → "Higher crash risk"
+   - Low volatility → "Defensive or stable market"
+   - High return + high volatility → "Growth market with risk"
+4. Structure your response with: Market Overview, Risk Profile, Return Characteristics, Comparative Insight (if applicable), Conclusion.
+5. Cite specific sources: "According to [source] (chunk X)..."
+6. Avoid generic phrases like "It depends" or "Markets can be unpredictable". Use data-backed statements instead.
+7. Clearly distinguish: "According to historical market analysis..." vs "Based on real-time data..."
+
+[USER QUESTION]`;
+    }
+
+    /**
+     * Retrieve RAG context dynamically based on query
+     */
+    private async retrieveRAGContext(query: string): Promise<string> {
+        if (!this.embeddingRetrievers || this.embeddingRetrievers.isEmpty) {
+            return "";
+        }
+
+        try {
+            logTitle("RAG RETRIEVAL");
+            const results = await this.embeddingRetrievers.retrieve(query, 5);
+            
+            if (results.length === 0) {
+                console.log("No relevant context retrieved.");
+                return "";
+            }
+
+            console.log(`Retrieved ${results.length} relevant chunks:`);
+            results.forEach((r, i) => {
+                console.log(`  ${i + 1}. ${r.metadata.source} (chunk ${r.metadata.chunk_id}) - score: ${(r.rerankScore || r.score).toFixed(3)}`);
+            });
+
+            return this.buildRAGContext(results);
+        } catch (error) {
+            console.error("Error retrieving RAG context:", error);
+            return "";
+        }
+    }
+
     public async invoke(prompt: string) {
         if (!this.llm) throw new Error("LLM not initialized");
 
+        // Dynamically retrieve RAG context for this query
+        const ragContext = await this.retrieveRAGContext(prompt);
+        
+        // Build final prompt with RAG context
+        let finalPrompt = prompt;
+        if (ragContext) {
+            finalPrompt = `${ragContext}\n\n${prompt}`;
+        }
+        
         // Force English output for this call
-        const finalPrompt = `${prompt}\n\nPlease respond in English only.`;
+        finalPrompt = `${finalPrompt}\n\nPlease respond in English only.`;
 
         let response = await this.llm.chat(finalPrompt);
 

@@ -1,0 +1,60 @@
+
+Market: US
+Period: 2020-01-03 to 2025-12-30
+
+The market showed an overall upward trend.
+Annual return was 14.75%.
+Volatility was 20.93%.
+Maximum drawdown reached -33.92%.
+
+This indicates a strong growth profile with high risk.
+
+
+
+Market: UK
+Period: 2020-01-03 to 2025-12-30
+
+The market showed an overall upward trend.
+Annual return was 5.86%.
+Volatility was 16.62%.
+Maximum drawdown reached -34.93%.
+
+This indicates a moderate or weak growth profile with controlled risk.
+
+
+
+Market: SG
+Period: 2020-01-03 to 2025-12-30
+
+The market showed an overall upward trend.
+Annual return was 7.02%.
+Volatility was 14.21%.
+Maximum drawdown reached -31.93%.
+
+This indicates a moderate or weak growth profile with controlled risk.
+
+
+
+Market: HK
+Period: 2020-01-03 to 2025-12-30
+
+The market showed an overall downward trend.
+Annual return was 1.43%.
+Volatility was 24.96%.
+Maximum drawdown reached -52.75%.
+
+This indicates a moderate or weak growth profile with high risk.
+
+
+
+Market: CN
+Period: 2020-01-03 to 2025-12-30
+
+The market showed an overall upward trend.
+Annual return was 5.74%.
+Volatility was 16.66%.
+Maximum drawdown reached -27.27%.
+
+This indicates a moderate or weak growth profile with controlled risk.
+
+

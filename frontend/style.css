@@ -1,0 +1,236 @@
+:root {
+    color-scheme: dark;
+    --bg: #050816;
+    --bg-elevated: #111827;
+    --accent: #38bdf8;
+    --text: #e5e7eb;
+    --text-muted: #9ca3af;
+    --border: #1f2937;
+    --danger: #f97373;
+
+    --bubble-max: 78%;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+        "Segoe UI", sans-serif;
+    background: radial-gradient(circle at top, #020617 0, #020617 40%, #000 100%);
+    color: var(--text);
+    min-height: 100svh;
+    display: flex;
+    justify-content: center;
+}
+
+.shell {
+    width: 100%;
+    max-width: 1200px;
+    margin: 20px;
+    border-radius: 18px;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    background: linear-gradient(145deg, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.98));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* ===== Header ===== */
+
+.header {
+    padding: 16px 18px;
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+}
+
+.title {
+    display: flex;
+    gap: 10px;
+}
+
+.orb {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #38bdf8, #0ea5e9);
+}
+
+.title-text-main {
+    font-weight: 600;
+}
+
+.title-text-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.badge {
+    font-size: 11px;
+    margin-left: 6px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+}
+
+.status {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.pill {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(56, 189, 248, 0.15);
+    color: #7dd3fc;
+    margin-right: 6px;
+}
+
+/* ===== Main ===== */
+
+.main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.messages {
+    flex: 1;
+    padding: 14px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.bubble-row {
+    display: flex;
+}
+
+.bubble-row.user {
+    justify-content: flex-end;
+}
+
+.bubble {
+    max-width: var(--bubble-max);
+    padding: 10px 12px;
+    border-radius: 14px;
+    font-size: 14px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+}
+
+.bubble.user {
+    background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+    color: #020617;
+}
+
+.bubble.agent {
+    background: #020617;
+    border: 1px solid var(--border);
+}
+
+.label {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+/* ===== Hint & Error ===== */
+
+.hint {
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.key {
+    border: 1px solid var(--border);
+    padding: 2px 6px;
+    border-radius: 6px;
+}
+
+.error {
+    padding: 6px 14px;
+    color: var(--danger);
+    display: none;
+}
+
+/* ===== Input ===== */
+
+.input-area {
+    padding: 10px;
+    display: flex;
+    gap: 8px;
+    border-top: 1px solid var(--border);
+}
+
+.input-shell {
+    flex: 1;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    padding: 4px 12px;
+}
+
+textarea {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    resize: none;
+    outline: none;
+    font: inherit;
+}
+
+.send {
+    border-radius: 999px;
+    border: none;
+    padding: 8px 14px;
+    background: linear-gradient(135deg, #22d3ee, #38bdf8);
+    color: #020617;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* ===== Responsive ===== */
+
+/* Mobile */
+@media (max-width: 768px) {
+    :root {
+        --bubble-max: 92%;
+    }
+
+    .title-text-sub,
+    .badge,
+    .pill {
+        display: none;
+    }
+
+    .shell {
+        margin: 8px;
+        border-radius: 14px;
+    }
+
+    .send {
+        padding: 10px 16px;
+    }
+}
+
+/* Large Desktop */
+@media (min-width: 1400px) {
+    .shell {
+        max-width: 1360px;
+    }
+
+    :root {
+        --bubble-max: 70%;
+    }
+}
