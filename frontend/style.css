@@ -141,6 +141,61 @@ body {
     margin-bottom: 4px;
 }
 
+.thinking-container {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.thinking-details {
+    margin: 0;
+}
+
+.thinking-summary {
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    padding: 4px 0;
+    font-weight: 500;
+}
+
+.thinking-summary::-webkit-details-marker {
+    display: none;
+}
+
+.thinking-summary::before {
+    content: "▾ ";
+    display: inline-block;
+    margin-right: 4px;
+    transition: transform 0.2s;
+    font-size: 10px;
+}
+
+.thinking-details:not([open]) .thinking-summary::before {
+    content: "▸ ";
+}
+
+.thinking-content {
+    margin-top: 6px;
+    padding: 8px 0;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-family: ui-monospace, "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    max-height: 300px;
+    overflow-y: auto;
+    word-break: break-word;
+}
+
+.answer-content {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(148, 163, 184, 0.15);
+}
+
 /* ===== Hint & Error ===== */
 
 .hint {

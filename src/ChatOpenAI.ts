@@ -93,6 +93,110 @@ export default class ChatOpenAI {
         };
     }
 
+    // Streaming chat logic - handles model response with streaming support
+    async chatStream(
+        prompt: string | undefined,
+        onToken: (token: string) => void
+    ): Promise<{ content: string; toolCalls: ToolCall[] }> {
+        logTitle("CHAT (STREAMING)");
+
+        if (prompt) {
+            this.messages.push({ role: "user", content: prompt });
+        }
+
+        const stream = await this.llm.chat.completions.create({
+            model: this.model,
+            messages: this.messages,
+            tools: this.getToolsDefinition(),
+            tool_choice: "auto",
+            stream: true,
+        });
+
+        logTitle("RESPONSE (STREAMING)");
+
+        let fullContent = "";
+        const toolCalls: ToolCall[] = [];
+        let toolCallBuffer: any[] = [];
+
+        for await (const chunk of stream) {
+            const choice = chunk.choices[0];
+            if (!choice) continue;
+
+            const delta = choice.delta;
+
+            // Handle content streaming
+            if (delta?.content) {
+                fullContent += delta.content;
+                onToken(delta.content);
+                process.stdout.write(delta.content);
+            }
+
+            // Handle tool calls streaming
+            if (delta?.tool_calls) {
+                for (const toolCallDelta of delta.tool_calls) {
+                    const index = toolCallDelta.index ?? 0;
+                    if (!toolCallBuffer[index]) {
+                        toolCallBuffer[index] = {
+                            id: toolCallDelta.id || "",
+                            function: {
+                                name: "",
+                                arguments: "",
+                            },
+                        };
+                    }
+
+                    if (toolCallDelta.id) {
+                        toolCallBuffer[index].id = toolCallDelta.id;
+                    }
+
+                    if (toolCallDelta.function?.name) {
+                        toolCallBuffer[index].function.name += toolCallDelta.function.name;
+                    }
+
+                    if (toolCallDelta.function?.arguments) {
+                        toolCallBuffer[index].function.arguments += toolCallDelta.function.arguments;
+                    }
+                }
+            }
+        }
+
+        // Process completed tool calls
+        for (const bufferedCall of toolCallBuffer) {
+            if (bufferedCall.id && bufferedCall.function.name) {
+                toolCalls.push({
+                    id: bufferedCall.id,
+                    function: {
+                        name: bufferedCall.function.name,
+                        arguments: bufferedCall.function.arguments || "{}",
+                    },
+                });
+            }
+        }
+
+        // Record model output
+        this.messages.push({
+            role: "assistant",
+            content: fullContent,
+            tool_calls: toolCalls.length > 0 ? toolCallBuffer.map((tc, idx) => ({
+                id: tc.id,
+                type: "function" as const,
+                function: {
+                    name: tc.function.name,
+                    arguments: tc.function.arguments || "{}",
+                },
+            })) : [],
+        });
+
+        if (fullContent) {
+            process.stdout.write("\n");
+        }
+
+        return {
+            content: fullContent,
+            toolCalls,
+        };
+    }
+
     // Append tool result back to chat context
     public appendToolResult(toolCallId: string, toolOutput: string) {
         this.messages.push({
