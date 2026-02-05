@@ -324,7 +324,6 @@ Use retrieved market knowledge if available, and tools if real-time data is need
                 }
             }
 
-            await this.close();
             return response?.content || "";
         } catch (error) {
             this.logThinking(`Error in invoke: ${error instanceof Error ? error.message : String(error)}`);
