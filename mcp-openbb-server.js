@@ -379,6 +379,13 @@ function normalizeSearch({ provider, query, data }) {
   };
 }
 
+function normalizeSymbol(symbol) {
+  if (typeof symbol === "string" && symbol.endsWith(".SH")) {
+    return symbol.replace(".SH", ".SS");
+  }
+  return symbol;
+}
+
 // ====== MCP SERVER SETUP ======
 
 const server = new McpServer({
@@ -408,6 +415,7 @@ server.registerTool(
     }),
   },
   async ({ symbol, provider }) => {
+    const normalizedSymbol = normalizeSymbol(symbol);
     const validation = validateProviderFor(
       provider,
       QUOTE_PROVIDERS,
@@ -425,7 +433,7 @@ server.registerTool(
         ],
         structuredContent: {
           error: errorMessage,
-          symbol,
+          symbol: normalizedSymbol,
           provider: validation.provider,
           raw: {},
         },
@@ -454,14 +462,14 @@ server.registerTool(
 
     for (const attemptProvider of attempts) {
       const result = await runOpenBB("equity_quote", {
-        symbol,
+        symbol: normalizedSymbol,
         provider: attemptProvider,
       });
 
       if (result.ok) {
         usedProvider = attemptProvider;
         normalized = normalizeQuote({
-          symbol,
+          symbol: normalizedSymbol,
           provider: attemptProvider,
           data: result.data,
         });
@@ -491,7 +499,7 @@ server.registerTool(
         : DEFAULT_HIST_PROVIDER;
 
       const histResult = await runOpenBB("equity_price_historical", {
-        symbol,
+        symbol: normalizedSymbol,
         provider: histProvider,
         start_date: startDate,
         end_date: endDate,
@@ -500,7 +508,7 @@ server.registerTool(
 
       if (histResult.ok) {
         const histNormalized = normalizeHistorical({
-          symbol,
+          symbol: normalizedSymbol,
           provider: histProvider,
           start_date: startDate,
           end_date: endDate,
@@ -525,7 +533,7 @@ server.registerTool(
             prevRow && prevRow.close != null ? Number(prevRow.close) : null;
 
           const fallbackQuote = {
-            symbol,
+            symbol: normalizedSymbol,
             provider: histProvider,
             timestamp: String(lastRow.date),
             price: fallbackPrice,
@@ -560,12 +568,12 @@ server.registerTool(
         content: [
           {
             type: "text",
-            text: `Error fetching quote for ${symbol}: ${errorMessage}`,
+            text: `Error fetching quote for ${normalizedSymbol}: ${errorMessage}`,
           },
         ],
         structuredContent: {
           error: errorMessage,
-          symbol,
+          symbol: normalizedSymbol,
           provider: usedProvider,
           raw: {
             quoteError: lastError || {},
@@ -624,6 +632,7 @@ server.registerTool(
     }),
   },
   async ({ symbol, provider, start_date, end_date, interval = "1d" }) => {
+    const normalizedSymbol = normalizeSymbol(symbol);
     const validation = validateProviderFor(
       provider,
       HISTORICAL_PROVIDERS,
@@ -641,7 +650,7 @@ server.registerTool(
         ],
         structuredContent: {
           error: errorMessage,
-          symbol,
+          symbol: normalizedSymbol,
           provider: validation.provider,
           start_date: start_date || null,
           end_date: end_date || null,
@@ -670,7 +679,7 @@ server.registerTool(
 
     for (const attemptProvider of attempts) {
       const result = await runOpenBB("equity_price_historical", {
-        symbol,
+        symbol: normalizedSymbol,
         provider: attemptProvider,
         start_date,
         end_date,
@@ -680,7 +689,7 @@ server.registerTool(
       if (result.ok) {
         usedProvider = attemptProvider;
         normalized = normalizeHistorical({
-          symbol,
+          symbol: normalizedSymbol,
           provider: attemptProvider,
           start_date,
           end_date,
@@ -707,12 +716,12 @@ server.registerTool(
         content: [
           {
             type: "text",
-            text: `Error fetching historical prices for ${symbol}: ${errorMessage}`,
+          text: `Error fetching historical prices for ${normalizedSymbol}: ${errorMessage}`,
           },
         ],
         structuredContent: {
           error: errorMessage,
-          symbol,
+        symbol: normalizedSymbol,
           provider: usedProvider,
           start_date: start_date || null,
           end_date: end_date || null,

@@ -28,6 +28,7 @@ You are a senior financial market analyst with institutional-grade expertise in 
 3. "equity_search" — search for equities by symbol or name via OpenBB.
 4. "fetch" — fetch online JSON or text from a URL.
 5. "file" — read/write file content to disk.
+6. "quant_signal" — model-driven trading signal from the PPO quant model.
 
 === TOOL USAGE STRATEGY ===
 Provider strategy:
@@ -42,6 +43,8 @@ Tool usage contract:
 - When you receive historical OHLCV rows, explicitly compute and cite numerical metrics such as: start_close, end_close, percent change over the window, max and min daily returns, largest gap up/down (open vs previous close), and a simple volatility proxy (standard deviation of daily returns) based strictly on the returned rows.
 - Do not invent prices or returns; if data is missing, say so instead of guessing.
 - In your final answers, always cite the symbol and provider used, and clearly distinguish between real-time quotes and historical data.
+For trading signal questions (e.g., "should I buy", "entry/exit", "position sizing"), you should call "quant_signal" to obtain a model-driven signal. Prefer this tool for short-term action, timing, buy/sell/hold, position suggestions, and stop loss / take profit questions. Do not use it for broad macro or long-term historical analysis.
+When "quant_signal" is used successfully, your final answer must explicitly include: signal (BUY/SELL/HOLD), suggested position, confidence, and model name/market context.
 
 === EVIDENCE-BASED REASONING (CRITICAL) ===
 When [RETRIEVED MARKET KNOWLEDGE] is provided:
@@ -143,6 +146,13 @@ Your final answer to the user must be written in plain text with absolutely no M
 - Present information through clear paragraph flow, not through formatting symbols
 `;
 
+// Manual web test prompts (quant signal):
+// - Should I buy AAPL now?
+// - Give me a short-term signal for VOD.L
+// - Should I enter 0700.HK today?
+// - What is the position suggestion for D05.SI?
+// - Should I hold or sell 600519.SS?
+
 const embeddingModel = process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small";
 const storePath = path.join(currentDir, ".vectorstore.json");
 const embeddingRetrievers = new EmbeddingRetrievers(embeddingModel, storePath);
@@ -200,11 +210,13 @@ async function runAgent(
         "@modelcontextprotocol/server-filesystem",
         currentDir,
     ]);
+    const quantMcp = new MCPClient("quant-model", "node", ["mcp-quant-server.js"]);
 
     const mcpClients = [
         openbbMcpClient,
         fetchMcp,
         fileMcp,
+        quantMcp,
         ...(legacyFinnhubMcpClient ? [legacyFinnhubMcpClient] : []),
     ];
 

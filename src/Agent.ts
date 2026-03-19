@@ -219,6 +219,25 @@ Use retrieved market knowledge if available, and tools if real-time data is need
         }
     }
 
+    /**
+     * Detect trading intent for quant_signal priority routing
+     */
+    private isTradingIntent(query: string): boolean {
+        const q = query.toLowerCase();
+        const tradingKeywords = [
+            "buy",
+            "sell",
+            "hold",
+            "enter",
+            "exit",
+            "position",
+            "signal",
+            "should i",
+            "recommendation",
+        ];
+        return tradingKeywords.some(k => q.includes(k));
+    }
+
     public async invoke(
         prompt: string,
         onToken?: (token: string) => void
@@ -239,10 +258,21 @@ Use retrieved market knowledge if available, and tools if real-time data is need
 
             const ragContext = await this.retrieveRAGContext(prompt, classification.intent);
             const intentInstructions = this.buildIntentInstructions(classification.intent, prompt);
+            const tradingIntent = this.isTradingIntent(prompt);
+
+            const tradingInstructions = tradingIntent
+                ? `[TRADING INTENT OVERRIDE]
+This query asks for trading action or signal. Call "quant_signal" first to obtain the model-driven signal.
+Do NOT call market data tools (equity_quote, equity_price_historical) before quant_signal.
+You may call market data tools only after quant_signal or if quant_signal fails.`
+                : "";
 
             let finalPrompt = prompt;
             if (intentInstructions) {
                 finalPrompt = `${intentInstructions}\n\n${finalPrompt}`;
+            }
+            if (tradingInstructions) {
+                finalPrompt = `${tradingInstructions}\n\n${finalPrompt}`;
             }
             if (ragContext) {
                 finalPrompt = `${ragContext}\n\n${finalPrompt}`;

@@ -97,6 +97,37 @@ Example call (JSON arguments):
 
 ---
 
+### Tool: `quant_signal`
+
+- **Purpose**: Return a model-driven trading signal from the PPO quant model.
+- **Input**
+  - **market**: `string` – Market identifier (e.g., `"US"`, `"HK"`).
+  - **ticker**: `string` – Ticker symbol (e.g., `"AAPL"`, `"700.HK"`).
+  - **features**: `object` – Feature payload for the model (precomputed).
+- **Output (`structuredContent`)**
+  - **signal**: `"BUY" | "SELL" | "HOLD"`
+  - **position**: `number` (range `[-1, 1]`)
+  - **confidence**: `number` (0 to 1)
+  - **raw_action**: `number` (range `[-1, 1]`)
+  - **model**: `string` (e.g., `"ppo_v1"`)
+
+Example call (JSON arguments):
+
+```json
+{
+  "market": "US",
+  "ticker": "AAPL",
+  "features": {
+    "trend_strength_raw": 0.32,
+    "MA_gap_raw": 0.18,
+    "regime_volatility_raw": 0.12,
+    "raw_return_1d": 0.004
+  }
+}
+```
+
+---
+
 ### Tool usage contract (for agents)
 
 - **Always specify `provider`** in calls to `equity_quote`, `equity_price_historical`, and `equity_search` (use `"yfinance"` by default; `"stooq"` is a recommended free fallback).

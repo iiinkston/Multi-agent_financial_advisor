@@ -1,0 +1,10 @@
+numpy
+pandas
+matplotlib
+scikit-learn
+torch
+gymnasium
+stable-baselines3
+sb3-contrib
+ipykernel
+tensorboard
