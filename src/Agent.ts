@@ -10,6 +10,11 @@ import {
     shouldDiscourageTools,
 } from "./queryClassifier.js";
 import { logTitle } from "./util.js";
+import {
+    buildTradingAnswer,
+    initTradingState,
+    runTradingWorkflow,
+} from "./tradingCoordinator.js";
 
 export default class Agent {
     private mcpClients: MCPClient[];
@@ -256,9 +261,16 @@ Use retrieved market knowledge if available, and tools if real-time data is need
                 console.log(`Reasoning: ${classification.reasoning}`);
             }
 
+            const tradingIntent = this.isTradingIntent(prompt);
+            if (tradingIntent) {
+                this.logThinking("Trading workflow: starting multi-agent coordinator");
+                const initialState = initTradingState(prompt, classification.intent);
+                const finalState = await runTradingWorkflow(initialState, this.mcpClients);
+                return buildTradingAnswer(finalState);
+            }
+
             const ragContext = await this.retrieveRAGContext(prompt, classification.intent);
             const intentInstructions = this.buildIntentInstructions(classification.intent, prompt);
-            const tradingIntent = this.isTradingIntent(prompt);
 
             const tradingInstructions = tradingIntent
                 ? `[TRADING INTENT OVERRIDE]

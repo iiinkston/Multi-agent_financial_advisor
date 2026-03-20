@@ -42,6 +42,8 @@ const fileMcp = new MCPClient("file", "npx", [
 
 // 4) Quant model tool (PPO signal)
 const quantMcp = new MCPClient("quant-model", "node", ["mcp-quant-server.js"]);
+// 5) News + sentiment tools (MCP)
+const newsSentimentMcp = new MCPClient("news-sentiment", "node", ["mcp-news-sentiment-server.js"]);
 
 // ====== SYSTEM PROMPT ======
 const systemPrompt = `
@@ -254,6 +256,7 @@ async function main() {
         fetchMcp,
         fileMcp,
         quantMcp,
+        newsSentimentMcp,
         ...(legacyFinnhubMcpClient ? [legacyFinnhubMcpClient] : []),
     ];
 

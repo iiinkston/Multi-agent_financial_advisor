@@ -211,12 +211,14 @@ async function runAgent(
         currentDir,
     ]);
     const quantMcp = new MCPClient("quant-model", "node", ["mcp-quant-server.js"]);
+    const newsSentimentMcp = new MCPClient("news-sentiment", "node", ["mcp-news-sentiment-server.js"]);
 
     const mcpClients = [
         openbbMcpClient,
         fetchMcp,
         fileMcp,
         quantMcp,
+        newsSentimentMcp,
         ...(legacyFinnhubMcpClient ? [legacyFinnhubMcpClient] : []),
     ];
 
