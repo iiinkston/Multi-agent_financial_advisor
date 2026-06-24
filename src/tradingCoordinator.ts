@@ -5,6 +5,17 @@ export type AgentState = {
   symbol: string;
   market?: string;
   intent?: string;
+  chartVisionAnalysis?: {
+    chart_type: "candlestick" | "line" | "bar" | "unknown";
+    trend: "bullish" | "bearish" | "sideways" | "unknown";
+    patterns: Array<{
+      name: string;
+      confidence: number;
+    }>;
+    confidence: number;
+    summary: string;
+    risk_note: string;
+  };
   quant?: {
     signal: "BUY" | "SELL" | "HOLD";
     confidence: number;
@@ -197,7 +208,11 @@ function isValidQuant(state: AgentState): boolean {
   return signal === "BUY" || signal === "SELL" || signal === "HOLD";
 }
 
-export function initTradingState(userQuery: string, intent?: string): AgentState {
+export function initTradingState(
+  userQuery: string,
+  intent?: string,
+  chartVisionAnalysis?: AgentState["chartVisionAnalysis"]
+): AgentState {
   const symbol = extractSymbolFromQuery(userQuery);
   const marketFromQuery = extractMarketFromQuery(userQuery);
   const marketFromSymbol = inferMarketFromSymbol(symbol);
@@ -208,6 +223,7 @@ export function initTradingState(userQuery: string, intent?: string): AgentState
     symbol: normalizeSymbol(symbol),
     market,
     intent,
+    chartVisionAnalysis,
     trace: { steps: [], providers: [], warnings: [] },
     errors: [],
   };
@@ -439,6 +455,15 @@ export function buildTradingAnswer(state: AgentState): string {
     );
   } else {
     lines.push(`Final signal for ${symbol} (${market}) is HOLD with confidence 0.`);
+  }
+
+  if (state.chartVisionAnalysis) {
+    const cv = state.chartVisionAnalysis;
+    lines.push(
+      `Chart vision (supplementary) suggests ${cv.trend} trend on a ${cv.chart_type} chart with confidence ${formatNumber(
+        cv.confidence
+      )}. ${cv.summary} Risk note: ${cv.risk_note}`
+    );
   }
 
   if (quant) {

@@ -83,6 +83,38 @@ export default class Agent {
     }
 
     /**
+     * Extract chart vision JSON block appended by server and return clean query text.
+     */
+    private extractChartVisionContext(prompt: string): {
+        cleanPrompt: string;
+        chartVisionAnalysis?: {
+            chart_type: "candlestick" | "line" | "bar" | "unknown";
+            trend: "bullish" | "bearish" | "sideways" | "unknown";
+            patterns: Array<{ name: string; confidence: number }>;
+            confidence: number;
+            summary: string;
+            risk_note: string;
+        };
+    } {
+        const blockRegex = /\[CHART_VISION_ANALYSIS\]([\s\S]*?)\[\/CHART_VISION_ANALYSIS\]/m;
+        const match = prompt.match(blockRegex);
+        if (!match) {
+            return { cleanPrompt: prompt.trim() };
+        }
+
+        let parsed: any;
+        try {
+            parsed = JSON.parse(match[1].trim());
+        } catch {
+            parsed = undefined;
+        }
+
+        const cleanPrompt = prompt.replace(blockRegex, "").trim();
+        const chartVisionAnalysis = parsed?.chartVisionAnalysis;
+        return { cleanPrompt, chartVisionAnalysis };
+    }
+
+    /**
      * Build RAG context block from retrieval results with financial reasoning instructions
      */
     private buildRAGContext(retrievalResults: RetrievalResult[]): string {
@@ -249,9 +281,10 @@ Use retrieved market knowledge if available, and tools if real-time data is need
     ): Promise<string> {
         try {
             if (!this.llm) throw new Error("LLM not initialized");
+            const { cleanPrompt, chartVisionAnalysis } = this.extractChartVisionContext(prompt);
 
             logTitle("QUERY CLASSIFICATION");
-            const classification = classifyQuery(prompt);
+            const classification = classifyQuery(cleanPrompt);
             this.logThinking(`Intent Classifier: ${classification.intent} (confidence: ${(classification.confidence * 100).toFixed(0)}%)`);
             if (classification.reasoning) {
                 this.logThinking(`Classification Reasoning: ${classification.reasoning}`);
@@ -261,16 +294,16 @@ Use retrieved market knowledge if available, and tools if real-time data is need
                 console.log(`Reasoning: ${classification.reasoning}`);
             }
 
-            const tradingIntent = this.isTradingIntent(prompt);
+            const tradingIntent = this.isTradingIntent(cleanPrompt);
             if (tradingIntent) {
                 this.logThinking("Trading workflow: starting multi-agent coordinator");
-                const initialState = initTradingState(prompt, classification.intent);
+                const initialState = initTradingState(cleanPrompt, classification.intent, chartVisionAnalysis);
                 const finalState = await runTradingWorkflow(initialState, this.mcpClients);
                 return buildTradingAnswer(finalState);
             }
 
-            const ragContext = await this.retrieveRAGContext(prompt, classification.intent);
-            const intentInstructions = this.buildIntentInstructions(classification.intent, prompt);
+            const ragContext = await this.retrieveRAGContext(cleanPrompt, classification.intent);
+            const intentInstructions = this.buildIntentInstructions(classification.intent, cleanPrompt);
 
             const tradingInstructions = tradingIntent
                 ? `[TRADING INTENT OVERRIDE]
@@ -279,7 +312,7 @@ Do NOT call market data tools (equity_quote, equity_price_historical) before qua
 You may call market data tools only after quant_signal or if quant_signal fails.`
                 : "";
 
-            let finalPrompt = prompt;
+            let finalPrompt = cleanPrompt;
             if (intentInstructions) {
                 finalPrompt = `${intentInstructions}\n\n${finalPrompt}`;
             }
@@ -288,6 +321,15 @@ You may call market data tools only after quant_signal or if quant_signal fails.
             }
             if (ragContext) {
                 finalPrompt = `${ragContext}\n\n${finalPrompt}`;
+            }
+            if (chartVisionAnalysis) {
+                finalPrompt = `${finalPrompt}
+
+[CHART_VISION_ANALYSIS]
+${JSON.stringify({ chartVisionAnalysis }, null, 2)}
+[/CHART_VISION_ANALYSIS]
+
+Chart vision is supplementary evidence only. If it conflicts with raw numerical indicators, prioritize numerical indicators.`;
             }
             finalPrompt = `${finalPrompt}\n\nPlease respond in English only.`;
 

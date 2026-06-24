@@ -101,7 +101,7 @@ body {
 
 .messages {
     flex: 1;
-    padding: 14px;
+    padding: 16px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -118,7 +118,7 @@ body {
 
 .bubble {
     max-width: var(--bubble-max);
-    padding: 10px 12px;
+    padding: 12px 14px;
     border-radius: 14px;
     font-size: 14px;
     line-height: 1.45;
@@ -222,17 +222,17 @@ body {
 /* ===== Input ===== */
 
 .input-area {
-    padding: 10px;
-    display: flex;
-    gap: 8px;
+    padding: 12px;
     border-top: 1px solid var(--border);
+    background: rgba(2, 6, 23, 0.4);
 }
 
 .input-shell {
-    flex: 1;
-    border-radius: 999px;
+    border-radius: 16px;
     border: 1px solid var(--border);
-    padding: 4px 12px;
+    padding: 10px 12px;
+    background: rgba(2, 6, 23, 0.65);
+    box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.06);
 }
 
 textarea {
@@ -243,6 +243,11 @@ textarea {
     resize: none;
     outline: none;
     font: inherit;
+    line-height: 1.5;
+    min-height: 24px;
+    max-height: 140px;
+    overflow-y: auto;
+    margin-bottom: 8px;
 }
 
 .send {
@@ -253,6 +258,74 @@ textarea {
     color: #020617;
     font-weight: 600;
     cursor: pointer;
+    min-width: 96px;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.send:disabled,
+.secondary-btn:disabled,
+.image-action-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.send:not(:disabled):hover,
+.secondary-btn:not(:disabled):hover,
+.image-action-btn:not(:disabled):hover {
+    transform: translateY(-1px);
+}
+
+.actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.secondary-btn,
+.image-action-btn {
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    background: #020617;
+    color: var(--text);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.image-action-btn {
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
+.image-meta {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    padding: 6px 8px;
+    border: 1px dashed rgba(148, 163, 184, 0.3);
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.45);
+}
+
+.image-preview {
+    width: 44px;
+    height: 44px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+}
+
+.image-name {
+    color: var(--text-muted);
+    font-size: 12px;
+    max-width: 300px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* ===== Responsive ===== */
@@ -274,8 +347,12 @@ textarea {
         border-radius: 14px;
     }
 
+    .actions {
+        flex-wrap: wrap;
+    }
+
     .send {
-        padding: 10px 16px;
+        min-width: 82px;
     }
 }
 

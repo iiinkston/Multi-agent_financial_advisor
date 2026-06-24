@@ -1,8 +1,22 @@
 const messagesEl = document.getElementById("messages");
 const inputEl = document.getElementById("input");
 const sendBtn = document.getElementById("send");
+const insertImageBtn = document.getElementById("insertImage");
+const imageInputEl = document.getElementById("imageInput");
+const imageMetaEl = document.getElementById("imageMeta");
+const imagePreviewEl = document.getElementById("imagePreview");
+const imageNameEl = document.getElementById("imageName");
+const removeImageBtn = document.getElementById("removeImage");
 const statusTextEl = document.getElementById("statusText");
 const errorEl = document.getElementById("error");
+let selectedImage = null;
+let selectedImagePreviewUrl = "";
+
+function autoResizeInput() {
+    inputEl.style.height = "auto";
+    const next = Math.min(inputEl.scrollHeight, 140);
+    inputEl.style.height = `${Math.max(next, 24)}px`;
+}
 
 function setError(message) {
     if (!message) {
@@ -17,7 +31,39 @@ function setError(message) {
 function setBusy(isBusy) {
     sendBtn.disabled = isBusy;
     inputEl.disabled = isBusy;
+    insertImageBtn.disabled = isBusy;
+    imageInputEl.disabled = isBusy;
+    removeImageBtn.disabled = isBusy || !selectedImage;
     statusTextEl.textContent = isBusy ? "Thinking…" : "Ready";
+}
+
+function clearSelectedImage() {
+    selectedImage = null;
+    if (selectedImagePreviewUrl) {
+        URL.revokeObjectURL(selectedImagePreviewUrl);
+        selectedImagePreviewUrl = "";
+    }
+    imageInputEl.value = "";
+    imagePreviewEl.removeAttribute("src");
+    imageNameEl.textContent = "";
+    imageMetaEl.style.display = "none";
+    removeImageBtn.disabled = true;
+}
+
+function renderSelectedImageMeta() {
+    if (!selectedImage) {
+        clearSelectedImage();
+        return;
+    }
+
+    imageNameEl.textContent = selectedImage.name;
+    if (selectedImagePreviewUrl) {
+        URL.revokeObjectURL(selectedImagePreviewUrl);
+    }
+    selectedImagePreviewUrl = URL.createObjectURL(selectedImage);
+    imagePreviewEl.src = selectedImagePreviewUrl;
+    imageMetaEl.style.display = "flex";
+    removeImageBtn.disabled = false;
 }
 
 function appendMessage(role, text, label) {
@@ -52,11 +98,12 @@ function parseLogLine(line) {
 
 async function sendMessage() {
     const message = inputEl.value.trim();
-    if (!message) return;
+    if (!message && !selectedImage) return;
 
     setError("");
-    appendMessage("user", message);
+    appendMessage("user", message || `[Image] ${selectedImage ? selectedImage.name : ""}`);
     inputEl.value = "";
+    autoResizeInput();
 
     setBusy(true);
 
@@ -100,14 +147,28 @@ async function sendMessage() {
     messagesEl.scrollTop = messagesEl.scrollHeight;
 
     try {
-        const res = await fetch("/api/agent/run", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "text/event-stream",
-            },
-            body: JSON.stringify({ query: message }),
-        });
+        const hasImage = Boolean(selectedImage);
+        const res = hasImage
+            ? await fetch("/api/agent/run", {
+                method: "POST",
+                headers: { "Accept": "text/event-stream" },
+                body: (() => {
+                    const formData = new FormData();
+                    formData.append("message", message);
+                    if (selectedImage) {
+                        formData.append("image", selectedImage);
+                    }
+                    return formData;
+                })(),
+            })
+            : await fetch("/api/agent/run", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "text/event-stream",
+                },
+                body: JSON.stringify({ query: message }),
+            });
 
         if (!res.ok) {
             throw new Error(`Request failed (${res.status})`);
@@ -165,11 +226,31 @@ async function sendMessage() {
         setError("Failed to contact agent. Please try again.");
         answerEl.textContent = "[Error: Failed to get response]";
     } finally {
+        clearSelectedImage();
         setBusy(false);
     }
 }
 
 sendBtn.addEventListener("click", sendMessage);
+insertImageBtn.addEventListener("click", () => imageInputEl.click());
+removeImageBtn.addEventListener("click", clearSelectedImage);
+imageInputEl.addEventListener("change", (event) => {
+    const target = event.target;
+    const file = target.files && target.files[0];
+    if (!file) {
+        clearSelectedImage();
+        return;
+    }
+    if (!file.type.startsWith("image/")) {
+        setError("Please select a valid image file.");
+        clearSelectedImage();
+        return;
+    }
+    selectedImage = file;
+    renderSelectedImageMeta();
+});
+
+inputEl.addEventListener("input", autoResizeInput);
 
 inputEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -179,3 +260,4 @@ inputEl.addEventListener("keydown", (e) => {
 });
 
 statusTextEl.textContent = "Ready";
+autoResizeInput();

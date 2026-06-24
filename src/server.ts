@@ -6,6 +6,7 @@ import MCPClient from "./MCPClient.js";
 import Agent from "./Agent.js";
 import EmbeddingRetrievers from "./embeddingRetrievers.js";
 import { logTitle } from "./util.js";
+import ChartVisionService, { ChartVisionAnalysis } from "./chartVisionService.js";
 import "dotenv/config";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -132,6 +133,12 @@ NOT:
 
 Use professional financial terminology, precise metrics, and evidence-based conclusions.
 
+=== CHART VISION EVIDENCE ===
+When chartVisionAnalysis is provided in the user context:
+- Treat chart vision as supplementary evidence only.
+- If chart vision conflicts with raw numerical indicators from tools or retrieved numerical data, prefer numerical indicators.
+- Do not overstate image-only inference confidence.
+
 === LANGUAGE REQUIREMENTS ===
 - Always respond in English only.
 - Never use Chinese or any other language unless the user explicitly asks.
@@ -156,6 +163,7 @@ Your final answer to the user must be written in plain text with absolutely no M
 const embeddingModel = process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small";
 const storePath = path.join(currentDir, ".vectorstore.json");
 const embeddingRetrievers = new EmbeddingRetrievers(embeddingModel, storePath);
+const chartVisionService = new ChartVisionService();
 let indexed = false;
 
 async function buildIndexOnce(): Promise<void> {
@@ -194,6 +202,7 @@ async function buildIndexOnce(): Promise<void> {
 
 async function runAgent(
     query: string,
+    chartVisionAnalysis?: ChartVisionAnalysis,
     onThinkingLog?: (message: string) => void,
     onToken?: (token: string) => void
 ): Promise<{ answer: string; thinking?: string }> {
@@ -223,6 +232,13 @@ async function runAgent(
     ];
 
     const thinkingLog: string[] = [];
+    const effectiveQuery = chartVisionAnalysis
+        ? `${query || "Please analyze the uploaded chart image."}
+
+[CHART_VISION_ANALYSIS]
+${JSON.stringify({ chartVisionAnalysis }, null, 2)}
+[/CHART_VISION_ANALYSIS]`
+        : query;
     const agent = new Agent(
         process.env.OPENAI_MODEL || "gpt-4.1-mini",
         mcpClients,
@@ -235,7 +251,7 @@ async function runAgent(
 
     try {
         await agent.init();
-        const answer = await agent.invoke(query, onToken);
+        const answer = await agent.invoke(effectiveQuery, onToken);
         await agent.close();
 
         const result: { answer: string; thinking?: string } = { answer };
@@ -255,6 +271,85 @@ function readBody(req: http.IncomingMessage): Promise<string> {
         req.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
         req.on("error", reject);
     });
+}
+
+function getMimeTypeFromName(filename: string): string {
+    const lower = filename.toLowerCase();
+    if (lower.endsWith(".png")) return "image/png";
+    if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+    if (lower.endsWith(".gif")) return "image/gif";
+    if (lower.endsWith(".webp")) return "image/webp";
+    return "application/octet-stream";
+}
+
+async function readRawBody(req: http.IncomingMessage): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        req.on("data", chunk => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+        req.on("end", () => resolve(Buffer.concat(chunks)));
+        req.on("error", reject);
+    });
+}
+
+async function parseMultipartForm(req: http.IncomingMessage): Promise<{ message: string; imageDataUrl?: string }> {
+    const contentType = req.headers["content-type"] || "";
+    const boundaryMatch = contentType.match(/boundary=([^;]+)/i);
+    if (!boundaryMatch) {
+        return { message: "" };
+    }
+    const boundary = boundaryMatch[1];
+    const body = await readRawBody(req);
+    const boundaryBuffer = Buffer.from(`--${boundary}`);
+    const headerSeparator = Buffer.from("\r\n\r\n");
+
+    let message = "";
+    let imageDataUrl: string | undefined;
+    let cursor = 0;
+
+    while (cursor < body.length) {
+        const start = body.indexOf(boundaryBuffer, cursor);
+        if (start < 0) break;
+        const next = body.indexOf(boundaryBuffer, start + boundaryBuffer.length);
+        if (next < 0) break;
+
+        let part = body.subarray(start + boundaryBuffer.length, next);
+        cursor = next;
+
+        if (part.length === 0) continue;
+        if (part[0] === 45 && part[1] === 45) break; // "--"
+        if (part[0] === 13 && part[1] === 10) {
+            part = part.subarray(2); // remove leading CRLF
+        }
+        if (part.length >= 2 && part[part.length - 2] === 13 && part[part.length - 1] === 10) {
+            part = part.subarray(0, part.length - 2); // remove trailing CRLF
+        }
+
+        const headerEnd = part.indexOf(headerSeparator);
+        if (headerEnd < 0) continue;
+        const headerRaw = part.subarray(0, headerEnd).toString("utf-8");
+        const contentRaw = part.subarray(headerEnd + headerSeparator.length);
+        const dispositionMatch = headerRaw.match(/name="([^"]+)"/i);
+        if (!dispositionMatch) continue;
+        const fieldName = dispositionMatch[1];
+
+        if (fieldName === "message") {
+            message = contentRaw.toString("utf-8").trim();
+            continue;
+        }
+
+        if (fieldName === "image") {
+            const filenameMatch = headerRaw.match(/filename="([^"]+)"/i);
+            const contentTypeMatch = headerRaw.match(/Content-Type:\s*([^\r\n]+)/i);
+            const fileName = filenameMatch?.[1] || "upload.bin";
+            const mime = contentTypeMatch?.[1]?.trim() || getMimeTypeFromName(fileName);
+            const fileBuffer = contentRaw;
+            if (fileBuffer.length > 0) {
+                imageDataUrl = `data:${mime};base64,${fileBuffer.toString("base64")}`;
+            }
+        }
+    }
+
+    return { message, imageDataUrl };
 }
 
 function sendJson(res: http.ServerResponse, status: number, payload: unknown) {
@@ -308,16 +403,31 @@ const server = http.createServer(async (req, res) => {
 
     if (url === "/api/agent/run" && method === "POST") {
         const streamMode = req.headers.accept?.includes("text/event-stream");
+        const contentType = req.headers["content-type"] || "";
+        const isMultipart = contentType.includes("multipart/form-data");
 
         if (streamMode) {
             try {
-                const body = await readBody(req);
-                const parsed = body ? JSON.parse(body) : {};
-                const query = typeof parsed?.query === "string" ? parsed.query.trim() : "";
+                let query = "";
+                let hasImage = false;
+                let chartVisionAnalysis: ChartVisionAnalysis | undefined;
 
-                if (!query) {
+                if (isMultipart) {
+                    const parsedInput = await parseMultipartForm(req);
+                    query = parsedInput.message.trim();
+                    hasImage = Boolean(parsedInput.imageDataUrl);
+                    if (parsedInput.imageDataUrl) {
+                        chartVisionAnalysis = await chartVisionService.analyzeChartDataUrl(parsedInput.imageDataUrl);
+                    }
+                } else {
+                    const body = await readBody(req);
+                    const parsed = body ? JSON.parse(body) : {};
+                    query = typeof parsed?.query === "string" ? parsed.query.trim() : "";
+                }
+
+                if (!query && !hasImage) {
                     res.writeHead(400, { "Content-Type": "application/json" });
-                    res.end(JSON.stringify({ error: "Missing query" }));
+                    res.end(JSON.stringify({ error: "Missing query or image" }));
                     return;
                 }
 
@@ -346,7 +456,7 @@ const server = http.createServer(async (req, res) => {
                 };
 
                 try {
-                    const result = await runAgent(query, onThinkingLog, onToken);
+                    const result = await runAgent(query, chartVisionAnalysis, onThinkingLog, onToken);
                     // Ensure final answer is sent (in case streaming didn't capture everything)
                     if (result.answer && result.answer !== answer) {
                         answer = result.answer;
@@ -365,16 +475,29 @@ const server = http.createServer(async (req, res) => {
             return;
         } else {
             try {
-                const body = await readBody(req);
-                const parsed = body ? JSON.parse(body) : {};
-                const query = typeof parsed?.query === "string" ? parsed.query.trim() : "";
+                let query = "";
+                let hasImage = false;
+                let chartVisionAnalysis: ChartVisionAnalysis | undefined;
 
-                if (!query) {
-                    sendJson(res, 400, { error: "Missing query" });
+                if (isMultipart) {
+                    const parsedInput = await parseMultipartForm(req);
+                    query = parsedInput.message.trim();
+                    hasImage = Boolean(parsedInput.imageDataUrl);
+                    if (parsedInput.imageDataUrl) {
+                        chartVisionAnalysis = await chartVisionService.analyzeChartDataUrl(parsedInput.imageDataUrl);
+                    }
+                } else {
+                    const body = await readBody(req);
+                    const parsed = body ? JSON.parse(body) : {};
+                    query = typeof parsed?.query === "string" ? parsed.query.trim() : "";
+                }
+
+                if (!query && !hasImage) {
+                    sendJson(res, 400, { error: "Missing query or image" });
                     return;
                 }
 
-                const result = await runAgent(query);
+                const result = await runAgent(query, chartVisionAnalysis);
                 sendJson(res, 200, result);
             } catch (error) {
                 sendJson(res, 500, { error: (error as Error).message || "Server error" });

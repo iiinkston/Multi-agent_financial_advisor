@@ -53,11 +53,20 @@
             <div class="input-shell">
                 <textarea id="input" rows="1"
                     placeholder="Type your question about markets, equities, or macro..."></textarea>
+                <input id="imageInput" type="file" accept="image/*" hidden />
+                <div id="imageMeta" class="image-meta" style="display: none;">
+                    <img id="imagePreview" class="image-preview" alt="Selected chart preview" />
+                    <span id="imageName" class="image-name"></span>
+                    <button id="removeImage" type="button" class="image-action-btn">Remove</button>
+                </div>
+                <div class="actions">
+                    <button id="insertImage" class="secondary-btn" type="button">Insert Image</button>
+                    <button id="send" class="send" type="button">
+                        <span class="icon">↗</span>
+                        <span>Send</span>
+                    </button>
+                </div>
             </div>
-            <button id="send" class="send">
-                <span class="icon">↗</span>
-                <span>Send</span>
-            </button>
         </section>
     </div>
 
